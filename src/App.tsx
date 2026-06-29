@@ -1,19 +1,20 @@
-import type { CSSProperties } from 'react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
-  AtSign,
-  Bell,
-  CheckCircle2,
-  Hash,
-  MessageSquare,
-  Paperclip,
-  Radio,
+  Avatar,
+  ChatContainer,
+  Conversation,
+  ConversationHeader,
+  ConversationList,
+  MainContainer,
+  Message,
+  MessageInput,
+  MessageList,
+  MessageSeparator,
   Search,
-  Send,
-  ShieldCheck,
-  Users,
-  Video,
-} from 'lucide-react'
+  Sidebar,
+  TypingIndicator,
+} from '@chatscope/chat-ui-kit-react'
+import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css'
 import './App.css'
 
 type ChannelStatus = 'Live' | 'Quiet' | 'Needs reply'
@@ -26,15 +27,17 @@ type Channel = {
   members: number
   responseTime: string
   status: ChannelStatus
+  color: string
 }
 
-type Message = {
+type ChatMessage = {
   id: string
   channelId: string
   author: string
   role: string
   body: string
   time: string
+  direction: 'incoming' | 'outgoing'
 }
 
 const channels: Channel[] = [
@@ -46,6 +49,7 @@ const channels: Channel[] = [
     members: 14,
     responseTime: '2m',
     status: 'Live',
+    color: '#6f42c1',
   },
   {
     id: 'support',
@@ -55,6 +59,7 @@ const channels: Channel[] = [
     members: 9,
     responseTime: '6m',
     status: 'Needs reply',
+    color: '#0d6efd',
   },
   {
     id: 'infra',
@@ -64,10 +69,11 @@ const channels: Channel[] = [
     members: 6,
     responseTime: '12m',
     status: 'Quiet',
+    color: '#198754',
   },
 ]
 
-const initialMessages: Message[] = [
+const initialMessages: ChatMessage[] = [
   {
     id: 'm1',
     channelId: 'launch',
@@ -75,6 +81,7 @@ const initialMessages: Message[] = [
     role: 'Product lead',
     body: 'Release checklist is down to payment copy, docs pass, and one pricing QA sweep.',
     time: '09:42',
+    direction: 'incoming',
   },
   {
     id: 'm2',
@@ -83,6 +90,7 @@ const initialMessages: Message[] = [
     role: 'Engineer',
     body: 'I pushed the billing event fix and attached the rollback note to the launch ticket.',
     time: '09:46',
+    direction: 'incoming',
   },
   {
     id: 'm3',
@@ -91,6 +99,7 @@ const initialMessages: Message[] = [
     role: 'Support',
     body: 'Three accounts are asking for invoice resend. Can finance confirm the new template?',
     time: '09:31',
+    direction: 'incoming',
   },
   {
     id: 'm4',
@@ -99,44 +108,34 @@ const initialMessages: Message[] = [
     role: 'SRE',
     body: 'Queue latency is stable after the worker scale-up. Monitoring for one more cycle.',
     time: '09:20',
+    direction: 'incoming',
   },
 ]
 
-const theme = {
-  '--accent': '#4f46e5',
-  '--accent-2': '#0ea5e9',
-  '--accent-3': '#f97316',
-} as CSSProperties
+function initials(name: string) {
+  return name
+    .split('-')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+}
 
-function getStatusClass(status: ChannelStatus) {
-  if (status === 'Live') return 'good'
-  if (status === 'Needs reply') return 'warn'
-  return 'info'
+function avatarSource(label: string, color: string) {
+  const text = initials(label)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="16" fill="${color}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="24" font-weight="700">${text}</text></svg>`
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 function App() {
   const [selectedId, setSelectedId] = useState(channels[0].id)
-  const [search, setSearch] = useState('')
   const [messages, setMessages] = useState(initialMessages)
-  const [draft, setDraft] = useState('')
   const selected = channels.find((channel) => channel.id === selectedId) ?? channels[0]
-
-  const filteredChannels = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return channels
-
-    return channels.filter((channel) =>
-      [channel.name, channel.team, channel.status].join(' ').toLowerCase().includes(query),
-    )
-  }, [search])
-
   const selectedMessages = messages.filter((message) => message.channelId === selected.id)
-  const unreadTotal = channels.reduce((sum, channel) => sum + channel.unread, 0)
-  const liveChannels = channels.filter((channel) => channel.status === 'Live').length
-  const members = channels.reduce((sum, channel) => sum + channel.members, 0)
 
-  function sendMessage() {
-    const body = draft.trim()
+  function sendMessage(message: string) {
+    const body = message.trim()
     if (!body) return
 
     setMessages((current) => [
@@ -148,212 +147,81 @@ function App() {
         role: 'Builder',
         body,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        direction: 'outgoing',
       },
     ])
-    setDraft('')
   }
 
   return (
-    <main className="app" style={theme}>
-      <div className="app-shell">
-        <header className="topbar">
-          <div className="brand">
-            <span className="brand-mark">
-              <MessageSquare size={22} aria-hidden="true" />
-            </span>
-            <div>
-              <h1>RelayDesk</h1>
-              <p>Team messaging command center</p>
+    <main className="relaydesk-app">
+      <section className="relaydesk-frame">
+        <MainContainer responsive>
+          <Sidebar position="left" scrollable={false}>
+            <div className="relaydesk-brand">
+              <strong>RelayDesk</strong>
+              <span>ChatScope team workspace</span>
             </div>
-          </div>
-          <div className="toolbar">
-            <button className="icon-button" type="button" aria-label="Open alerts">
-              <Bell size={18} aria-hidden="true" />
-            </button>
-            <button className="ghost-button" type="button">
-              <Video size={17} aria-hidden="true" />
-              Start huddle
-            </button>
-            <button className="action-button" type="button">
-              <AtSign size={17} aria-hidden="true" />
-              Invite teammate
-            </button>
-          </div>
-        </header>
-
-        <section className="hero-grid">
-          <div className="hero-copy">
-            <p className="eyebrow">Real-time collaboration</p>
-            <h2>Channels, replies, unread state, and team context for fast-moving work.</h2>
-            <p>
-              RelayDesk is a focused messaging surface with channel search, live room
-              status, reply urgency, and a working message composer.
-            </p>
-          </div>
-          <aside className="command-stack" aria-label="Message actions">
-            <button className="action-button" type="button">
-              <Send size={17} aria-hidden="true" />
-              Send digest
-            </button>
-            <button className="ghost-button" type="button">
-              <Paperclip size={17} aria-hidden="true" />
-              Attach brief
-            </button>
-            <button className="ghost-button" type="button">
-              <ShieldCheck size={17} aria-hidden="true" />
-              Review access
-            </button>
-          </aside>
-        </section>
-
-        <section className="stats-grid" aria-label="Messaging summary">
-          <article className="metric">
-            <span className="metric-icon">
-              <Radio size={19} aria-hidden="true" />
-            </span>
-            <h3>{liveChannels}</h3>
-            <p>Live channels</p>
-          </article>
-          <article className="metric">
-            <span className="metric-icon">
-              <Bell size={19} aria-hidden="true" />
-            </span>
-            <h3>{unreadTotal}</h3>
-            <p>Unread messages</p>
-          </article>
-          <article className="metric">
-            <span className="metric-icon">
-              <Users size={19} aria-hidden="true" />
-            </span>
-            <h3>{members}</h3>
-            <p>Workspace members</p>
-          </article>
-          <article className="metric">
-            <span className="metric-icon">
-              <CheckCircle2 size={19} aria-hidden="true" />
-            </span>
-            <h3>98%</h3>
-            <p>Message delivery</p>
-          </article>
-        </section>
-
-        <section className="workspace-grid">
-          <div className="panel">
-            <div className="panel-title">
-              <div>
-                <h2>Channels</h2>
-                <p>Select a room and continue the thread.</p>
-              </div>
-            </div>
-            <div className="search-row">
-              <label className="search-box">
-                <Search size={17} aria-hidden="true" />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search channels"
-                />
-              </label>
-            </div>
-            <div className="data-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Channel</th>
-                    <th>Team</th>
-                    <th>Members</th>
-                    <th>Unread</th>
-                    <th>Reply</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredChannels.map((channel) => (
-                    <tr key={channel.id}>
-                      <td>
-                        <button
-                          className="row-button"
-                          type="button"
-                          onClick={() => setSelectedId(channel.id)}
-                        >
-                          <span className="strong">
-                            <Hash size={14} aria-hidden="true" /> {channel.name}
-                          </span>
-                        </button>
-                      </td>
-                      <td>{channel.team}</td>
-                      <td>{channel.members}</td>
-                      <td>{channel.unread}</td>
-                      <td>{channel.responseTime}</td>
-                      <td>
-                        <span className={`status ${getStatusClass(channel.status)}`}>
-                          {channel.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <aside className="panel">
-            <div className="panel-title">
-              <div>
-                <h2>#{selected.name}</h2>
-                <p>{selected.team} channel</p>
-              </div>
-              <span className={`status ${getStatusClass(selected.status)}`}>
-                {selected.status}
-              </span>
-            </div>
-            <div className="detail-stack">
-              <div className="mini-grid">
-                <div className="mini-stat">
-                  <p>Unread</p>
-                  <strong>{selected.unread}</strong>
-                </div>
-                <div className="mini-stat">
-                  <p>Reply pace</p>
-                  <strong>{selected.responseTime}</strong>
-                </div>
-              </div>
-              <div className="detail-row">
-                <span className="muted">Thread</span>
-                {selectedMessages.map((message) => (
-                  <span className="message-row" key={message.id}>
-                    <span className="split-row">
-                      <span>
-                        <span className="strong">{message.author}</span>{' '}
-                        <span className="muted">{message.role}</span>
-                      </span>
-                      <span className="muted">{message.time}</span>
-                    </span>
-                    <span>{message.body}</span>
-                  </span>
-                ))}
-              </div>
-              <div className="detail-row">
-                <label className="search-box">
-                  <MessageSquare size={17} aria-hidden="true" />
-                  <input
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') sendMessage()
-                    }}
-                    placeholder="Write a reply"
+            <Search placeholder="Search channels" />
+            <ConversationList>
+              {channels.map((channel) => (
+                <Conversation
+                  active={channel.id === selected.id}
+                  info={`${channel.unread} unread · ${channel.responseTime}`}
+                  key={channel.id}
+                  lastSenderName={channel.team}
+                  name={`#${channel.name}`}
+                  onClick={() => setSelectedId(channel.id)}
+                  unreadCnt={channel.unread}
+                >
+                  <Avatar
+                    name={initials(channel.name)}
+                    src={avatarSource(channel.name, channel.color)}
+                    status={channel.status === 'Live' ? 'available' : 'away'}
                   />
-                </label>
-                <button className="action-button" type="button" onClick={sendMessage}>
-                  <Send size={17} aria-hidden="true" />
-                  Send reply
-                </button>
-              </div>
-            </div>
-          </aside>
-        </section>
-      </div>
+                </Conversation>
+              ))}
+            </ConversationList>
+          </Sidebar>
+
+          <ChatContainer>
+            <ConversationHeader>
+              <Avatar
+                name={initials(selected.name)}
+                src={avatarSource(selected.name, selected.color)}
+                status={selected.status === 'Live' ? 'available' : 'away'}
+              />
+              <ConversationHeader.Content
+                info={`${selected.members} members · ${selected.status}`}
+                userName={`#${selected.name}`}
+              />
+            </ConversationHeader>
+            <MessageList
+              typingIndicator={
+                selected.status === 'Live' ? (
+                  <TypingIndicator content={`${selected.team} is active now`} />
+                ) : undefined
+              }
+            >
+              <MessageSeparator content="Today" />
+              {selectedMessages.map((message) => (
+                <Message
+                  key={message.id}
+                  model={{
+                    direction: message.direction,
+                    message: message.body,
+                    position: 'single',
+                    sender: message.author,
+                    sentTime: message.time,
+                  }}
+                >
+                  <Message.Header sender={`${message.author} · ${message.role}`} sentTime={message.time} />
+                </Message>
+              ))}
+            </MessageList>
+            <MessageInput attachButton placeholder={`Message #${selected.name}`} onSend={sendMessage} />
+          </ChatContainer>
+        </MainContainer>
+      </section>
     </main>
   )
 }
